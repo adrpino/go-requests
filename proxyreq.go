@@ -3,9 +3,12 @@ package requests
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	_ "golang.org/x/net/proxy"
 	"math/rand"
-	_ "net/url"
+	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -23,17 +26,13 @@ func (p *Proxy) String() string {
 }
 
 type ProxyPool interface {
-	SetProxy()
-	SetPool()
-	Proxies()
-	CurrentProxy()
-	DropProxy()
-	NumProxies()
+	SetPool() error
 }
 
 type ProxyList struct {
 	Pool         []*Proxy
 	Source       string
+	client       *http.Client
 	currentProxy *Proxy
 	currentInd   int
 }
@@ -41,8 +40,14 @@ type ProxyList struct {
 func (pl *ProxyList) Init() error {
 	pl.Source = "https://proxy-list.org/english/index.php"
 	err := pl.SetPool()
-	pl.SetProxy()
-	return err
+	if err != nil {
+		return err
+	}
+	err = pl.SetProxy()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (pl *ProxyList) SetPool() error {
@@ -63,14 +68,20 @@ func (pl *ProxyList) SetPool() error {
 			if err != nil {
 				continue
 			}
-			//			fmt.Println(string(pr))
+			if pr == nil {
+				continue
+			}
 			ps := string(pr)
-			pool = append(pool, NewProxy(ps))
+			numDots := len(strings.Split(ps, "."))
+			if numDots == 4 {
+				pool = append(pool, NewProxy(ps))
+				continue
+			}
 		}
 
 	})
 	pl.Pool = pool
-	return err
+	return nil
 }
 
 func (pl *ProxyList) NumProxies() int {
@@ -84,6 +95,21 @@ func (pl *ProxyList) SetProxy() error {
 		return err
 	}
 	ind := rand.Intn(n)
+	pr := pl.Pool[ind]
+	proxyStr := fmt.Sprintf("http://%s", pr)
+	proxyURL, err := url.Parse(proxyStr)
+	if err != nil {
+		fmt.Println("Error parsing proxy")
+		return err
+	}
+	if err != nil {
+		fmt.Println("error setting proxy")
+		return err
+	}
+	Transport := &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+	client := &http.Client{Transport: Transport}
+	pl.client = client
+	//	pl.currentProxy = NewProxy(proxyStr)
 	pl.currentProxy = pl.Pool[ind]
 	pl.currentInd = ind
 	return nil
@@ -91,12 +117,13 @@ func (pl *ProxyList) SetProxy() error {
 
 // Returns currently set proxy
 func (pl *ProxyList) CurrentProxy() (*Proxy, error) {
-	proxy := pl.currentProxy
-	if proxy.p == "" {
+	pr := pl.currentProxy
+	fmt.Println(pr)
+	if pr.p == "" {
 		err := errors.New("currentProxy is unset")
 		return nil, err
 	}
-	return proxy, nil
+	return pr, nil
 }
 
 func (pl *ProxyList) DeleteProxy() error {
@@ -107,4 +134,13 @@ func (pl *ProxyList) DeleteProxy() error {
 	ind := pl.currentInd
 	pl.Pool = append(pl.Pool[:ind], pl.Pool[ind+1:]...)
 	return nil
+}
+
+func (pl *ProxyList) Get(url string) (*http.Response, error) {
+	res, err := pl.client.Get(url)
+	//	defer res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
