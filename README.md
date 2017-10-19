@@ -1,3 +1,3 @@
 # go-requests
 
-`:3`
+`Simple library to do HTTP requests routed through public proxies and Tor.
