@@ -1,15 +1,16 @@
 package requests
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
-	_ "golang.org/x/net/proxy"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type Proxy struct {
@@ -136,9 +137,17 @@ func (pl *ProxyList) DeleteProxy() error {
 	return nil
 }
 
-func (pl *ProxyList) Get(url string) (*http.Response, error) {
-	res, err := pl.client.Get(url)
-	//	defer res.Body.Close()
+// Get method with timeout
+func (pl *ProxyList) Get(url string, t time.Duration) (*http.Response, error) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, t*time.Second)
+	defer cancel()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	res, err := pl.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
