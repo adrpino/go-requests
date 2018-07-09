@@ -74,8 +74,7 @@ func NewHandler() ReqHandler {
 
 // Runs a request and returns the resulting bytes
 // TODO separate in case the the response object is required
-func (r *ReqHandler) Request(url string) (chan []byte, error) {
-	ch := make(chan []byte)
+func (r *ReqHandler) Request(url string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -90,14 +89,5 @@ func (r *ReqHandler) Request(url string) (chan []byte, error) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(string(content))
-	ch <- content
 	return content, nil
-}
-
-func (r *ReqHandler) BatchRequest(urls []string) ([]*http.Response, error) {
-	for _, url := range urls {
-		go r.Request(url)
-	}
-
 }

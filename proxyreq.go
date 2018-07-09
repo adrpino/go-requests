@@ -17,17 +17,23 @@ type Proxy struct {
 	p string
 }
 
-// Constructor
+// Proxy Constructor
 func NewProxy(ps string) *Proxy {
 	return &Proxy{ps}
 }
 
+// Stringer interface
 func (p *Proxy) String() string {
 	return string(p.p)
 }
 
+// Interface  that reques
 type ProxyPool interface {
 	SetPool() error
+}
+
+type ProxyManual struct {
+	Pool []*Proxy
 }
 
 type ProxyList struct {
@@ -38,8 +44,18 @@ type ProxyList struct {
 	currentInd   int
 }
 
+// ProxyList Constructor
+func NewProxyList() (*ProxyList, error) {
+	ph := &ProxyList{}
+	err := ph.Init()
+	if err != nil {
+		return nil, err
+	}
+	return ph, nil
+}
+
 func (pl *ProxyList) Init() error {
-	pl.Source = "https://proxy-list.org/english/index.php"
+	pl.Source = "https://proxy-list.org/english/search.php"
 	err := pl.SetPool()
 	if err != nil {
 		return err
@@ -60,7 +76,7 @@ func (pl *ProxyList) SetPool() error {
 	if err != nil {
 		panic(err)
 	}
-	var pool = make([]*Proxy, 10)
+	var pool []*Proxy
 	doc.Find("table").Each(func(i int, s *goquery.Selection) {
 		elem := s.Find("li").Find("script").Text()
 		encoded := strings.Split(elem, "'")
@@ -73,10 +89,16 @@ func (pl *ProxyList) SetPool() error {
 				continue
 			}
 			ps := string(pr)
+			if ps == "" {
+				continue
+			}
 			numDots := len(strings.Split(ps, "."))
 			if numDots == 4 {
-				pool = append(pool, NewProxy(ps))
-				continue
+				proxy := NewProxy(ps)
+				if proxy == nil {
+					continue
+				}
+				pool = append(pool, proxy)
 			}
 		}
 
@@ -85,6 +107,7 @@ func (pl *ProxyList) SetPool() error {
 	return nil
 }
 
+// How many proxies left you have
 func (pl *ProxyList) NumProxies() int {
 	return len(pl.Pool)
 }
