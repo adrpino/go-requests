@@ -1,8 +1,10 @@
 package requests
 
 import (
+	"bytes"
 	"fmt"
 	"golang.org/x/net/proxy"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -45,41 +47,38 @@ func OnionRequest(u string) (*http.Response, error) {
 
 // ReqHandler unsurprisingly handles requests
 type ReqHandler struct {
-	client    *http.Client
-	transport *http.Transport
-	headers   http.Header
+	Headers http.Header
+	client  http.Client
 }
 
 // Constructor
-func NewHandler() ReqHandler {
-	userAgent := []string{"Mozilla/5.0 (Windows NT 6.1; rv:45.0) Gecko/20100101 Firefox/45.0"}
-	encoding := []string{"gzip, deflate"}
-	headers := http.Header{
-		"User-Agent":      userAgent,
-		"Accept-Encoding": encoding,
-	}
+func NewHandler(headers http.Header) (*ReqHandler, error) {
 	tbProxyURL, err := url.Parse("socks5://127.0.0.1:9050")
 	if err != nil {
-		fatalf("Failed to parse proxy URL: %v\n", err)
+		return nil, err
 	}
 	tbDialer, err := proxy.FromURL(tbProxyURL, proxy.Direct)
 	if err != nil {
-		fatalf("Failed to obtain proxy dialer: %v\n", err)
+		return nil, err
 	}
 	tr := &http.Transport{Dial: tbDialer.Dial}
-	client := &http.Client{Transport: tr}
-	r := ReqHandler{transport: tr, headers: headers, client: client}
-	return r
+	client := http.Client{Transport: tr}
+	r := &ReqHandler{Headers: headers, client: client}
+	return r, nil
 }
 
 // Runs a request and returns the resulting bytes
 // TODO separate in case the the response object is required
-func (r *ReqHandler) Request(url string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
+func (r *ReqHandler) Request(method, url string, data *string) ([]byte, error) {
+	var buf io.Reader
+	if data != nil {
+		buf = bytes.NewBufferString(*data)
+	}
+	req, err := http.NewRequest(method, url, buf)
 	if err != nil {
 		return nil, err
 	}
-	req.Header = r.headers
+	req.Header = r.Headers
 	res, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
