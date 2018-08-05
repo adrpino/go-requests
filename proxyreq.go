@@ -42,12 +42,17 @@ type ProxyList struct {
 	client       *http.Client
 	currentProxy *Proxy
 	currentInd   int
+	*ReqHandler
 }
 
 // ProxyList Constructor
 func NewProxyList() (*ProxyList, error) {
-	ph := &ProxyList{}
-	err := ph.Init()
+	h, err := NewHandler(nil)
+	if err != nil {
+		return nil, err
+	}
+	ph := &ProxyList{ReqHandler: h}
+	err = ph.Init()
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +73,7 @@ func (pl *ProxyList) Init() error {
 }
 
 func (pl *ProxyList) SetPool() error {
-	res, err := OnionRequest(pl.Source)
+	res, err := pl.ReqHandler.Do("GET", pl.Source, nil, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -16,39 +16,10 @@ func fatalf(fmtStr string, args interface{}) {
 	os.Exit(-1)
 }
 
-func OnionRequest(u string) (*http.Response, error) {
-	// Create a transport that uses Tor Browser's SocksPort.  If
-	// talking to a system tor, this may be an AF_UNIX socket, or
-	// 127.0.0.1:9050 instead.
-	tbProxyURL, err := url.Parse("socks5://127.0.0.1:9050")
-	if err != nil {
-		fatalf("Failed to parse proxy URL: %v\n", err)
-	}
-
-	// Get a proxy Dialer that will create the connection on our
-	// behalf via the SOCKS5 proxy.  Specify the authentication
-	// and re-create the dialer/transport/client if tor's
-	// IsolateSOCKSAuth is needed.
-	tbDialer, err := proxy.FromURL(tbProxyURL, proxy.Direct)
-	if err != nil {
-		fatalf("Failed to obtain proxy dialer: %v\n", err)
-	}
-
-	// Make a http.Transport that uses the proxy dialer, and a
-	// http.Client that uses the transport.
-	tbTransport := &http.Transport{Dial: tbDialer.Dial}
-	client := &http.Client{Transport: tbTransport}
-
-	// Example: Fetch something.  Real code will probably want to use
-	// client.Do() so they can change the User-Agent.
-	resp, err := client.Get(u)
-	return resp, err
-}
-
 // ReqHandler unsurprisingly handles requests
 type ReqHandler struct {
-	Headers http.Header
-	client  http.Client
+	Header http.Header
+	client http.Client
 }
 
 // Constructor
@@ -63,13 +34,12 @@ func NewHandler(headers http.Header) (*ReqHandler, error) {
 	}
 	tr := &http.Transport{Dial: tbDialer.Dial}
 	client := http.Client{Transport: tr}
-	r := &ReqHandler{Headers: headers, client: client}
+	r := &ReqHandler{Header: headers, client: client}
 	return r, nil
 }
 
-// Runs a request and returns the resulting bytes
-// TODO separate in case the the response object is required
-func (r *ReqHandler) Request(method, url string, data *string) ([]byte, error) {
+// Do runs the requests and returns the response object
+func (r *ReqHandler) Do(method, url string, data *string, header *http.Header) (*http.Response, error) {
 	var buf io.Reader
 	if data != nil {
 		buf = bytes.NewBufferString(*data)
@@ -78,8 +48,20 @@ func (r *ReqHandler) Request(method, url string, data *string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header = r.Headers
+	if header != nil {
+		req.Header = *header
+	} else {
+		req.Header = r.Header
+	}
 	res, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *ReqHandler) Request(method, url string, data *string, header *http.Header) ([]byte, error) {
+	res, err := r.Do(method, url, data, header)
 	if err != nil {
 		return nil, err
 	}
